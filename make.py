@@ -15,11 +15,11 @@ output_file = "bin\\hello.exe"
 #compiler
 compiler = "cl.exe"
 #include dirs
-includes = "/I .\\dep\\inc /I .\\sub "
+includes = "" # for example "/I .\\dep\\inc /I .\\sub "
 #library dirs
-libdirs = "/LIBPATH:\".\\dep\\lib\""
+libdirs = "" # for example "/LIBPATH:\".\\dep\\lib\""
 #libs to link
-libs = "shell32.lib gdi32.lib user32.lib"
+libs = "" # for example "shell32.lib gdi32.lib user32.lib"
 #compiler args
 cargs = includes + ("/nologo /experimental:module /module:output %s /std:c++latest /EHsc /MD /Fo%s /module:search %s /c") % (out_dir, out_dir, out_dir)
 #linker args
@@ -29,9 +29,13 @@ largs = "/nologo /experimental:module /std:c++latest /MD" + " " + libs
 #source extenstions
 source_exts = [".ixx", ".cpp", ".cc", ".c", ".cxx"]
 
-file_by_mod = {}
-deps = {}
-compiled = {}
+class BuildSession:
+    def __init__(self):
+       self.file_by_mod = {} # <mod, filename>
+       self.deps = {} # <filename, array of modules>
+       self.compiled = {} # <filename,bool> already compiled flag
+       self.obj_files = [] # list of generated or existing object files to link
+
 
 def makedirs():
     if not os.path.exists(out_dir):
@@ -72,7 +76,7 @@ def resolveImportMods(lines):
             mods.append(mod)
     return mods
 
-def resolveDependencies():
+def resolveDependencies(build):
     print("resolving dependencies...")
     for root,dirs,files in os.walk(src_dir):
         for file in files:
@@ -83,13 +87,12 @@ def resolveDependencies():
                 lines = file.readlines()
                 mod = resolveModName(lines)
                 if mod != None:
-                    file_by_mod[mod] = fullpath
+                    build.file_by_mod[mod] = fullpath
                 
                 imps = resolveImportMods(lines)
-                deps[fullpath] = imps
-                compiled[fullpath] = False
+                build.deps[fullpath] = imps
 
-                print("%s(%s) - %s" % (fullpath, mod, imps))
+                print("%s(%s) - %s" % (fullpath, mod, imps)) # shows dependencies of each file
                 file.close()
 
 def getObjName(filename):
@@ -106,11 +109,14 @@ def compile(filename):
         return False
     return True
 
-def recursiveCompile(filename, should):
-    if compiled[filename]:
+def recursiveCompile(filename, should, build):
+    obj_fname = getObjName(filename)
+    if obj_fname not in build.obj_files:
+        build.obj_files.append(obj_fname)
+    
+    if filename in build.compiled and build.compiled[filename]:
         return True, False
 
-    obj_fname = getObjName(filename)
     obj_mtime = 0
     if os.path.exists(obj_fname):
         obj_mtime = os.path.getmtime(obj_fname)
@@ -119,22 +125,25 @@ def recursiveCompile(filename, should):
     else:
         should = True
 
-    for dep in deps[filename]:
-        if dep in file_by_mod: #skip std modules
-            file = file_by_mod[dep]
-            ret, interrupt = recursiveCompile(file, False)
+    for dep in build.deps[filename]:
+        if dep in build.file_by_mod: #skip std modules
+            file = build.file_by_mod[dep]
+            ret, interrupt = recursiveCompile(file, False, build)
             if interrupt:
                 return False, True
             should |= ret
 
     if should:
         comp = compile(filename)
-        compiled[filename] = comp
+        build.compiled[filename] = comp
         return should, not comp
 
     return should, False
 
 def make():
+    makedirs()
+    build = BuildSession()
+    resolveDependencies(build)
     should = False
     os.environ.update(vs_env_dict())
     print("compiling...")
@@ -143,7 +152,7 @@ def make():
             ext = os.path.splitext(file)[1]
             fullpath = os.path.join(root, file)
             if ext in source_exts:
-                ret,interrupt = recursiveCompile(fullpath, False)
+                ret,interrupt = recursiveCompile(fullpath, False, build)
                 if interrupt:
                     sys.exit(1)
                   
@@ -152,17 +161,13 @@ def make():
     if os.path.exists(output_file):
         exe_mtime = os.path.getmtime(output_file)
     shouldlink = False
-    for root,dirs,files in os.walk(out_dir):
-        allobj = ""
-        for file in files:
-            ext = os.path.splitext(file)[1]
-            fullpath = os.path.join(root, file)
-            file_mtime = os.path.getmtime(fullpath)
-            if file_mtime > exe_mtime:
-                shouldlink = True
-            if ext == ".obj":
-                objfile = os.path.join(root, file)
-                allobj += objfile + " "
+    for obj_fname in build.obj_files:
+        file_mtime = os.path.getmtime(obj_fname)
+        if file_mtime > exe_mtime:
+            shouldlink = True
+            
+    allobj = ' '.join(build.obj_files);
+    # print(allobj) #show all object files to be linked
                 
     if shouldlink:
         command = "%s %s %s /link /OUT:%s %s" % (compiler, largs, allobj, output_file, libdirs)
@@ -172,8 +177,8 @@ def make():
             sys.exit(1)
     else:
         print("no obj files modified...")
+    
+    print("SUCCESS")
 
-makedirs()
-resolveDependencies()
 make()
     
