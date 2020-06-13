@@ -59,6 +59,9 @@ def resolveImportMod(line):
     find = re.search("^import (.*);", line)
     if find != None:
         return find.group(1)
+    find = re.search("^export import (.*);", line)
+    if find != None:
+        return find.group(1)        
     return None
 
 def resolveModName(lines):
