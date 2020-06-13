@@ -1,3 +1,4 @@
+import screen;
 import screen_hello;
 
 import log;
@@ -8,8 +9,11 @@ import export_import;
 int main()
 {
 	Log::msg("Hello from cpp");
-	ScreenHello scr;
-	scr.say();
+	
+	Screen* scr = new ScreenHello();
+	scr->say();
+	delete scr;
+	
 	testAnotherName();
 	testDeepDep();
 	exportImportTest();
