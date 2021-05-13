@@ -21,7 +21,7 @@ libdirs = "" # for example "/LIBPATH:\".\\dep\\lib\""
 #libs to link
 libs = "" # for example "shell32.lib gdi32.lib user32.lib"
 #compiler args
-cargs = includes + ("/nologo /experimental:module /module:output %s /std:c++latest /EHsc /MD /Fo%s /module:search %s /c") % (out_dir, out_dir, out_dir)
+cargs = includes + ("/nologo /experimental:module /ifcOutput %s /std:c++latest /EHsc /MD /Fo%s /ifcSearchDir %s /c") % (out_dir, out_dir, out_dir)
 #linker args
 largs = "/nologo /experimental:module /std:c++latest /MD" + " " + libs
 
@@ -129,6 +129,13 @@ def recursiveCompile(filename, should, build):
         should = True
 
     for dep in build.deps[filename]:
+        if dep[0] == ":":
+            for m, f in build.file_by_mod.items():
+                if filename == f:
+                    if ":" in m:
+                        m = m[:m.find(":")]
+                    dep = m + dep
+                    
         if dep in build.file_by_mod: #skip std modules
             file = build.file_by_mod[dep]
             ret, interrupt = recursiveCompile(file, False, build)

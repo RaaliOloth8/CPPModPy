@@ -6,6 +6,8 @@ import another_name;
 import deep_dep;
 import export_import;
 
+import part_test;
+
 int main()
 {
 	Log::msg("Hello from cpp");
@@ -17,5 +19,8 @@ int main()
 	testAnotherName();
 	testDeepDep();
 	exportImportTest();
+	
+	part_test_part1();
+	part_test_part2();
 	return 0;
 }
